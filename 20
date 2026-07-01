@@ -1,0 +1,845 @@
+#%%
+# Parameters
+inicio = '052026'
+final = '052026'
+#%%
+import pandas as pd
+import numpy as np
+import re
+import datetime
+import os
+#%%
+# mes = 'Febrero'
+# anio = '2019'
+# mes_ = "fe"
+# meses_n = "02"
+# meses_ = "fe"
+#%%
+a1, a2, m1, m2 = inicio[2::], final[2::], inicio[0:2], final[0:2]
+rango_anios = range(int(a1),int(a2)+1)
+#%%
+meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre']
+meses_ = ['en','fe','ma','ab','my','jn','jl','ag','se','oc','no','di']
+meses_n = ['01','02','03','04','05','06','07','08','09','10','11','12']
+#%% md
+#### Generador de Backups
+#%%
+import os
+import shutil
+
+#Archivo
+source_file = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Historicos\\20.Ranking Depósitos por Tipo.xlsx"
+#landing
+destination_dir = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Historicos\\Backups"
+
+
+def copy_file_to_directory(source, des):
+    # Crear el directorio de destino si no existe
+    if not os.path.exists(des):
+        os.makedirs(des)
+    # Extraer el nombre del archivo de la ruta de origen
+    file_name = os.path.basename(source)
+    # Construir la ruta de destino completa
+    dest_file = os.path.join(des, file_name)
+    try:
+        # Copiar el archivo
+        shutil.copyfile(source, dest_file)
+        print(f"Archivo copiado exitosamente.")
+    except Exception as e:
+        print(f"Error al copiar el archivo: {str(e)}")
+        
+copy_file_to_directory(source_file, destination_dir)
+
+#%%
+array_rutas = []
+for i in rango_anios:
+    if(rango_anios[-1]==i):
+        if (len(rango_anios)==1):
+            for j in range(int(m1),int(m2)+1):
+                if(len(str(j))==1):
+                    j = '0' + str(j)
+                    
+                ruta = str(j) + str(i)
+                array_rutas.append(ruta)
+
+        else:
+            for j in range(1,int(m2)+1):
+                if(len(str(j))==1):
+                    j = '0' + str(j)
+                ruta = str(j) + str(i) 
+                array_rutas.append(ruta)
+                
+    elif(i != rango_anios[0]):
+        for j in range(1,13):
+            if(len(str(j))==1):
+                j = '0' + str(j)
+            ruta = str(j) + str(i)
+            array_rutas.append(ruta)
+        
+    else:
+        if (len(rango_anios)==1):
+            for j in range(int(m1),int(m2)+1):
+                if(len(str(j))==1):
+                    j = '0' + str(j)
+                ruta = str(j) + str(i)
+                array_rutas.append(ruta)
+
+        else:
+            for j in range(int(m1),13):
+                if(len(str(j))==1):
+                    j = '0' + str(j)
+                ruta = str(j) + str(i)
+                array_rutas.append(ruta)
+#%%
+import warnings
+warnings.filterwarnings("ignore")
+#%%
+def renombrar_columnas_por_posicion(df, mapping):
+    cols = list(df.columns)
+    for pos, nombre in mapping.items():
+        if pos < len(cols):
+            cols[pos] = nombre
+    df.columns = cols
+    return df
+#%%
+def es_deposito_plazo(valor):
+    """
+    Compara de forma robusta contra 'Depositos a Plazo' / 'Depositos a plazo'.
+    El reporte de la SBS a veces agrega un asterisco de nota al pie
+    (ej. 'Depositos a Plazo*'), lo cual rompia la comparacion exacta
+    original y generaba DataFrames vacios / desalineados (IndexError).
+    """
+    if pd.isnull(valor):
+        return False
+    texto = str(valor).strip()
+    texto = texto.rstrip("*").strip()
+    return texto.lower() == "depósitos a plazo"
+#%%
+def main(mes, mes_, anio):
+    ###### BANCO ##############
+    archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Bancos\\" + "B-2320-" + mes_ +anio+ ".XLS"
+    file_found = False
+
+    for i in range(12, 0, -1):
+        if os.path.isfile(archivo):
+            file_found = True
+            last_file = archivo
+            break
+
+    if not file_found:
+        print("Error: Bancos "+ mes)
+        if (meses_n[meses_.index(mes_)] == '01'):
+            mesA = '12'
+            a = str(int(anio) -1)
+        else:
+            mesA = str(int(meses_n[meses_.index(mes_)]) - 1)
+            if (len(mesA) == 1 ):
+                   mesA = '0' + mesA
+            a = anio
+        months = {"01": "en", "02": "fe", "03": "ma", "04": "ab", "05": "my", "06": "jn", "07": "jl", "08": "ag","09":"se", "10":"oc", "11":"no","12": "di"}
+        mesB = months.get(mesA)
+        archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Bancos\\" + "B-2320-" + mesB + a + ".XLS"
+
+    DF1 = pd.read_excel(archivo, sheet_name = 0)
+    DF1 = DF1.dropna(axis = 1, how = "all")
+
+    last_index = len(DF1) -1
+    stop_index = None
+
+    for i in range (last_index,-1,-1):
+        if DF1.iloc[i,0] == "Depósitos de Ahorro":
+            stop_index = i
+            break
+
+    if stop_index is not None:
+        DF1 = DF1.iloc[:stop_index+1]
+
+    for index, row in enumerate(DF1.iloc[:, 2]):
+        if not pd.isnull(row):
+            column_index = index
+            break
+        DF1.drop(index, inplace= True)
+
+    DF1.columns = DF1.iloc[0, ::]
+    DF1.drop(DF1.index[0], inplace = True)
+    DF1 = DF1.dropna()
+    # DF1.columns.values[0] = "Posicionamiento"
+    # DF1.columns.values[1] = "Detallada"
+    # DF1.columns.values[2] = "Monto (En miles de soles)"
+    # DF1.columns.values[3] = "Participación"
+    # DF1.columns.values[4] = "Porcentaje Acumulado"
+
+    DF1 = renombrar_columnas_por_posicion(DF1, {0: "Posicionamiento"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {1: "Detallada"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {2: "Monto (En miles de soles)"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {3: "Participación"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {4: "Porcentaje Acumulado"})
+
+    DF1.iloc[:, 3:] = DF1.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF1.iloc[:,3:] = DF1.iloc[: , 3:]/100
+
+    ruta_renombre = 'Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Diccionario_SBS.xlsx'
+    df_ren = pd.read_excel(ruta_renombre, sheet_name ='Rankings')
+    df_ren = df_ren.set_index("Nombre_Antiguo")
+    dic_ren = df_ren.to_dict()
+
+    def dic_cambio_n(row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"][row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+
+    DF1["Detallada"] = DF1.apply(dic_cambio_n, axis = 1)
+    DF1 = DF1.T
+    DF1 = DF1.reset_index()
+    DF1.columns = DF1.iloc[1, ::]
+    DF1.drop(DF1.index[1], inplace = True)
+
+    def dic_cambio_n (row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"] [row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+    DF1["Detallada"] = DF1.apply(dic_cambio_n,axis = 1)
+
+    # bASE 2
+
+    DF2 = pd.read_excel(archivo, sheet_name = 0)
+    DF2 = DF2.dropna(axis = 1, how = "all")
+    last_index2 = len(DF2) -1
+    stop_index2 = None
+    for i in range (last_index2,-1,-1):
+        if es_deposito_plazo(DF2.iloc[i,0]):
+            stop_index2 = i
+            break
+
+    if stop_index2 is not None:
+        DF2 = DF2.iloc[:stop_index2+1]
+
+    for index, row in DF2.iterrows():
+        if row.iloc[0]== "Depósitos de Ahorro":
+            break
+        else:
+            DF2.drop(index, inplace= True)
+
+    DF2 = DF2.dropna()
+    # DF2.columns.values[0] = "Posicionamiento"
+    # DF2.columns.values[1] = "Detallada"
+    # DF2.columns.values[2] = "Monto (En miles de soles)"
+    # DF2.columns.values[3] = "Participación"
+    # DF2.columns.values[4] = "Porcentaje Acumulado"
+
+    DF2 = renombrar_columnas_por_posicion(DF2, {0: "Posicionamiento"})
+    DF2 = renombrar_columnas_por_posicion(DF2, {1: "Detallada"})
+    DF2 = renombrar_columnas_por_posicion(DF2, {2: "Monto (En miles de soles)"})
+    DF2 = renombrar_columnas_por_posicion(DF2, {3: "Participación"})
+    DF2 = renombrar_columnas_por_posicion(DF2, {4: "Porcentaje Acumulado"})
+    DF2.iloc[:, 3:] = DF2.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF2.iloc[:,3:] = DF2.iloc[: , 3:]/100
+
+    DF2["Detallada"] = DF2.apply(dic_cambio_n, axis = 1)
+    DF2 = DF2.T
+    DF2 = DF2.reset_index()
+    DF2.columns = DF2.iloc[1, ::]
+    DF2.drop(DF2.index[1], inplace = True)
+
+     ### Base 3
+    DF3 = pd.read_excel(archivo, sheet_name = 0)
+    DF3 = DF3.dropna(axis = 1, how = "all")
+
+    for index, row in DF3.iterrows():
+        if es_deposito_plazo(row.iloc[0]):
+            break
+        else:
+            DF3.drop(index, inplace= True)
+
+    DF3 = DF3.dropna()
+    # DF3.columns.values[0] = "Posicionamiento"
+    # DF3.columns.values[1] = "Detallada"
+    # DF3.columns.values[2] = "Monto (En miles de soles)"
+    # DF3.columns.values[3] = "Participación"
+    # DF3.columns.values[4] = "Porcentaje Acumulado"
+
+    DF3 = renombrar_columnas_por_posicion(DF3, {0: "Posicionamiento"})
+    DF3 = renombrar_columnas_por_posicion(DF3, {1: "Detallada"})
+    DF3 = renombrar_columnas_por_posicion(DF3, {2: "Monto (En miles de soles)"})
+    DF3 = renombrar_columnas_por_posicion(DF3, {3: "Participación"})
+    DF3 = renombrar_columnas_por_posicion(DF3, {4: "Porcentaje Acumulado"})
+
+    DF3.iloc[:, 3:] = DF3.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF3.iloc[:,3:] = DF3.iloc[: , 3:]/100
+
+    DF3["Detallada"] = DF3.apply(dic_cambio_n, axis = 1)
+    DF3 = DF3.T
+    DF3 = DF3.reset_index()
+    DF3.columns = DF3.iloc[1, ::]
+    DF3.drop(DF3.index[1], inplace = True)
+
+    DF_Base_Bancos = pd.DataFrame()
+    for i in range (0, len(DF1.columns)-1):
+        DF_ = DF1.copy()
+        a = DF1.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_1 = DF1.get([ "Detallada"])
+        DF_1.insert(0, "Tipo", "Depósitos a la Vista")
+        DF_1.insert(0, "Nombre", a)
+        DF_1.insert(0, "Moneda", "MN")
+        DF_1.insert(0, "Institución", "Bancos")
+        DF_1.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_1.insert(6, fecha_col, DF1[a])
+
+        DF_2 = DF2.copy()
+        DF2 = DF2.loc[:, ~DF2.columns.duplicated()]
+        b = DF2.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_2 = DF2.get([ "Detallada"])
+        DF_2.insert(0, "Tipo", "Depósitos de Ahorro")
+        DF_2.insert(0, "Nombre", b)
+        DF_2.insert(0, "Moneda", "MN")
+        DF_2.insert(0, "Institución", "Bancos")
+        DF_2.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_2.insert(6, fecha_col, DF2[b])
+
+        DF_3 = DF3.copy()
+        DF3 = DF3.loc[:, ~DF3.columns.duplicated()]
+        c = DF3.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_3 = DF3.get([ "Detallada"])
+        DF_3.insert(0, "Tipo", "Depósitos a Plazo")
+        DF_3.insert(0, "Nombre", c)
+        DF_3.insert(0, "Moneda", "MN")
+        DF_3.insert(0, "Institución", "Bancos")
+        DF_3.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_3.insert(6, fecha_col, DF3[c])
+
+        DF_Base_Bancos = pd.concat([DF_Base_Bancos, DF_1, DF_2, DF_3])
+        
+    #### FINANCIERAS ######
+    archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Financieras\\" + "B-3246-" + mes_ +anio+ ".XLS"
+    file_found = False
+
+    for i in range(12, 0, -1):
+        if os.path.isfile(archivo):
+            file_found = True
+            last_file = archivo
+            break
+
+    if not file_found:
+        print("Error: Financieras "+ mes)
+        if (meses_n[meses_.index(mes_)] == '01'):
+            mesA = '12'
+            a = str(int(anio) -1)
+        else:
+            mesA = str(int(meses_n[meses_.index(mes_)]) - 1)
+            if (len(mesA) == 1 ):
+                   mesA = '0' + mesA
+            a = anio
+        months = {"01": "en", "02": "fe", "03": "ma", "04": "ab", "05": "my", "06": "jn", "07": "jl", "08": "ag","09":"se", "10":"oc", "11":"no","12": "di"}
+        mesB = months.get(mesA)
+        archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Financieras\\" + "B-3246-" + mesB + a + ".XLS"
+
+    DF1 = pd.read_excel(archivo, sheet_name = 0)
+    DF1 = DF1.dropna(axis = 1, how = "all")
+
+    last_index = len(DF1) -1
+    stop_index = None
+
+    for i in range (last_index,-1,-1):
+        if DF1.iloc[i,0] == "Depósitos de Ahorro":
+            stop_index = i
+            break
+
+    if stop_index is not None:
+        DF1 = DF1.iloc[:stop_index+1]
+
+    for index, row in enumerate(DF1.iloc[:, 2]):
+        if not pd.isnull(row):
+            column_index = index
+            break
+        DF1.drop(index, inplace= True)
+
+    DF1.columns = DF1.iloc[0, ::]
+    DF1.drop(DF1.index[0], inplace = True)
+    DF1 = DF1.dropna()
+    # DF1.columns.values[0] = "Posicionamiento"
+    # DF1.columns.values[1] = "Detallada"
+    # DF1.columns.values[2] = "Monto (En miles de soles)"
+    # DF1.columns.values[3] = "Participación"
+    # DF1.columns.values[4] = "Porcentaje Acumulado"
+
+    DF1 = renombrar_columnas_por_posicion(DF1, {0: "Posicionamiento"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {1: "Detallada"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {2: "Monto (En miles de soles)"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {3: "Participación"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {4: "Porcentaje Acumulado"})
+
+    DF1.iloc[:, 3:] = DF1.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF1.iloc[:,3:] = DF1.iloc[: , 3:]/100
+
+    ruta_renombre = 'Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Diccionario_SBS.xlsx'
+    df_ren = pd.read_excel(ruta_renombre, sheet_name ='Rankings')
+    df_ren = df_ren.set_index("Nombre_Antiguo")
+    dic_ren = df_ren.to_dict()
+
+    def dic_cambio_n(row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"][row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+
+    DF1["Detallada"] = DF1.apply(dic_cambio_n, axis = 1)
+    DF1 = DF1.T
+    DF1 = DF1.reset_index()
+    DF1.columns = DF1.iloc[1, ::]
+    DF1.drop(DF1.index[1], inplace = True)
+
+    def dic_cambio_n (row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"] [row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+    DF1["Detallada"] = DF1.apply(dic_cambio_n,axis = 1)
+
+    ## BASE 2 #####
+
+    DF2 = pd.read_excel(archivo, sheet_name = 0)
+    DF2 = DF2.dropna(axis = 1, how = "all")
+    last_index2 = len(DF2) -1
+    stop_index2 = None
+    for i in range (last_index2,-1,-1):
+        if es_deposito_plazo(DF2.iloc[i,0]):
+            stop_index2 = i
+            break
+
+    if stop_index2 is not None:
+        DF2 = DF2.iloc[:stop_index2+1]
+
+    for index, row in DF2.iterrows():
+        if row.iloc[0]== "Depósitos de Ahorro":
+            break
+        else:
+            DF2.drop(index, inplace= True)
+
+    DF2 = DF2.dropna()
+    DF2.columns.values[0] = "Posicionamiento"
+    DF2.columns.values[1] = "Detallada"
+    DF2.columns.values[2] = "Monto (En miles de soles)"
+    DF2.columns.values[3] = "Participación"
+    DF2.columns.values[4] = "Porcentaje Acumulado"
+    DF2.iloc[:, 3:] = DF2.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF2.iloc[:,3:] = DF2.iloc[: , 3:]/100
+
+    DF2["Detallada"] = DF2.apply(dic_cambio_n, axis = 1)
+    DF2 = DF2.T
+    DF2 = DF2.reset_index()
+    DF2.columns = DF2.iloc[1, ::]
+    DF2.drop(DF2.index[1], inplace = True)
+
+    ### base 3 ######
+    DF3 = pd.read_excel(archivo, sheet_name = 0)
+    DF3 = DF3.dropna(axis = 1, how = "all")
+
+    for index, row in DF3.iterrows():
+        if es_deposito_plazo(row.iloc[0]):
+            break
+        else:
+            DF3.drop(index, inplace= True)
+
+    DF3 = DF3.dropna()
+    DF3.columns.values[0] = "Posicionamiento"
+    DF3.columns.values[1] = "Detallada"
+    DF3.columns.values[2] = "Monto (En miles de soles)"
+    DF3.columns.values[3] = "Participación"
+    DF3.columns.values[4] = "Porcentaje Acumulado"
+    DF3.iloc[:, 3:] = DF3.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF3.iloc[:,3:] = DF3.iloc[: , 3:]/100
+
+    DF3["Detallada"] = DF3.apply(dic_cambio_n, axis = 1)
+    DF3 = DF3.T
+    DF3 = DF3.reset_index()
+    DF3.columns = DF3.iloc[1, ::]
+    DF3.drop(DF3.index[1], inplace = True)
+
+    DF_Base_Fin = pd.DataFrame()
+
+    for i in range (0, len(DF1.columns)-1):
+        DF_ = DF1.copy()
+        a = DF1.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_1 = DF1.get([ "Detallada"])
+        DF_1.insert(0, "Tipo", "Depósitos a la Vista")
+        DF_1.insert(0, "Nombre", a)
+        DF_1.insert(0, "Moneda", "MN")
+        DF_1.insert(0, "Institución", "Financieras")
+        DF_1.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_1.insert(6, fecha_col, DF1[a])
+
+        DF_2 = DF2.copy()
+        b = DF2.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_2 = DF2.get([ "Detallada"])
+        DF_2.insert(0, "Tipo", "Depósitos de Ahorro")
+        DF_2.insert(0, "Nombre", b)
+        DF_2.insert(0, "Moneda", "MN")
+        DF_2.insert(0, "Institución", "Financieras")
+        DF_2.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_2.insert(6, fecha_col, DF2[b])
+
+        DF_3 = DF3.copy()
+        c = DF3.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_3 = DF3.get([ "Detallada"])
+        DF_3.insert(0, "Tipo", "Depósitos a Plazo")
+        DF_3.insert(0, "Nombre", c)
+        DF_3.insert(0, "Moneda", "MN")
+        DF_3.insert(0, "Institución", "Financieras")
+        DF_3.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_3.insert(6, fecha_col, DF3[c])
+
+        DF_Base_Fin = pd.concat([DF_Base_Fin, DF_1, DF_2, DF_3])
+        
+    ###### CAJAS #########################
+    
+    archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Cajas\\" + "C-1241-" + mes_ +anio+ ".XLS"
+    file_found = False
+
+    for i in range(12, 0, -1):
+        if os.path.isfile(archivo):
+            file_found = True
+            last_file = archivo
+            break
+
+    if not file_found:
+        print("Error: Cajas "+ mes)
+        if (meses_n[meses_.index(mes_)] == '01'):
+            mesA = '12'
+            a = str(int(anio) -1)
+        else:
+            mesA = str(int(meses_n[meses_.index(mes_)]) - 1)
+            if (len(mesA) == 1 ):
+                   mesA = '0' + mesA
+            a = anio
+        months = {"01": "en", "02": "fe", "03": "ma", "04": "ab", "05": "my", "06": "jn", "07": "jl", "08": "ag","09":"se", "10":"oc", "11":"no","12": "di"}
+        mesB = months.get(mesA)
+        archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Cajas\\" + "C-1241-" + mesB + a + ".XLS"
+
+    DF1 = pd.read_excel(archivo, sheet_name = 0)
+    DF1 = DF1.dropna(axis = 1, how = "all")
+
+    last_index = len(DF1) -1
+    stop_index = None
+
+    for i in range (last_index,-1,-1):
+        if es_deposito_plazo(DF1.iloc[i,0]):
+            stop_index = i
+            break
+
+    if stop_index is not None:
+        DF1 = DF1.iloc[:stop_index+1]
+
+    for index, row in enumerate(DF1.iloc[:, 2]):
+        if not pd.isnull(row):
+            column_index = index
+            break
+        DF1.drop(index, inplace= True)
+
+    DF1.columns = DF1.iloc[0, ::]
+    DF1.drop(DF1.index[0], inplace = True)
+    DF1 = DF1.dropna()
+    # DF1.columns.values[0] = "Posicionamiento"
+    # DF1.columns.values[1] = "Detallada"
+    # DF1.columns.values[2] = "Monto (En miles de soles)"
+    # DF1.columns.values[3] = "Participación"
+    # DF1.columns.values[4] = "Porcentaje Acumulado"
+
+    DF1 = renombrar_columnas_por_posicion(DF1, {0: "Posicionamiento"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {1: "Detallada"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {2: "Monto (En miles de soles)"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {3: "Participación"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {4: "Porcentaje Acumulado"})
+
+    DF1.iloc[:, 3:] = DF1.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF1.iloc[:,3:] = DF1.iloc[: , 3:]/100
+
+    ruta_renombre = 'Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Diccionario_SBS.xlsx'
+    df_ren = pd.read_excel(ruta_renombre, sheet_name ='Rankings')
+    df_ren = df_ren.set_index("Nombre_Antiguo")
+    dic_ren = df_ren.to_dict()
+
+    def dic_cambio_n(row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"][row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+
+    DF1["Detallada"] = DF1.apply(dic_cambio_n, axis = 1)
+    DF1 = DF1.T
+    DF1 = DF1.reset_index()
+    DF1.columns = DF1.iloc[1, ::]
+    DF1.drop(DF1.index[1], inplace = True)
+
+    def dic_cambio_n (row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"] [row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+    DF1["Detallada"] = DF1.apply(dic_cambio_n,axis = 1)
+
+    #### Base 2 ###
+    DF3 = pd.read_excel(archivo, sheet_name = 0)
+    DF3 = DF3.dropna(axis = 1, how = "all")
+
+    for index, row in DF3.iterrows():
+        if es_deposito_plazo(row.iloc[0]):
+            break
+        else:
+            DF3.drop(index, inplace= True)
+
+    DF3 = DF3.dropna()
+    DF3.columns.values[0] = "Posicionamiento"
+    DF3.columns.values[1] = "Detallada"
+    DF3.columns.values[2] = "Monto (En miles de soles)"
+    DF3.columns.values[3] = "Participación"
+    DF3.columns.values[4] = "Porcentaje Acumulado"
+    DF3.iloc[:, 3:] = DF3.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF3.iloc[:,3:] = DF3.iloc[: , 3:]/100
+
+    DF3["Detallada"] = DF3.apply(dic_cambio_n, axis = 1)
+    DF3 = DF3.T
+    DF3 = DF3.reset_index()
+    DF3.columns = DF3.iloc[1, ::]
+    DF3.drop(DF3.index[1], inplace = True)
+
+    DF_Base_Caj = pd.DataFrame()
+    for i in range (0, len(DF1.columns)-1):
+        DF_ = DF1.copy()
+        a = DF1.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_1 = DF1.get([ "Detallada"])
+        DF_1.insert(0, "Tipo", "Depósitos de Ahorro")
+        DF_1.insert(0, "Nombre", a)
+        DF_1.insert(0, "Moneda", "MN")
+        DF_1.insert(0, "Institución", "Cajas")
+        DF_1.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_1.insert(6, fecha_col, DF1[a])
+
+        DF_3 = DF3.copy()
+        c = DF3.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_3 = DF3.get([ "Detallada"])
+        DF_3.insert(0, "Tipo", "Depósitos a Plazo")
+        DF_3.insert(0, "Nombre", c)
+        DF_3.insert(0, "Moneda", "MN")
+        DF_3.insert(0, "Institución", "Cajas")
+        DF_3.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_3.insert(6, fecha_col, DF3[c])
+
+        DF_Base_Caj = pd.concat([DF_Base_Caj, DF_1, DF_3])
+        
+    ###### CAJAS RURALES ###################
+    
+    archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Cajas Rurales\\" + "C-2246-" + mes_ + anio + ".XLS"
+    file_found = False
+
+    for i in range(12, 0, -1):
+        if os.path.isfile(archivo):
+            file_found = True
+            last_file = archivo
+            break
+
+    if not file_found:
+        print("Error: Cajas Rurales "+ mes)
+        if (meses_n[meses_.index(mes_)] == '01'):
+            mesA = '12'
+            a = str(int(anio) -1)
+        else:
+            mesA = str(int(meses_n[meses_.index(mes_)]) - 1)
+            if (len(mesA) == 1 ):
+                   mesA = '0' + mesA
+            a = anio
+        months = {"01": "en", "02": "fe", "03": "ma", "04": "ab", "05": "my", "06": "jn", "07": "jl", "08": "ag","09":"se", "10":"oc", "11":"no","12": "di"}
+        mesB = months.get(mesA)
+        archivo = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Carpeta de Descarga\\20. Ranking Depósitos por Tipo\\descargas_SBS\\Cajas Rurales\\" + "C-2246-" + mesB + a + ".XLS"
+
+    DF1 = pd.read_excel(archivo, sheet_name = 0)
+    DF1 = DF1.dropna(axis = 1, how = "all")
+
+    last_index = len(DF1) -1
+    stop_index = None
+
+    for i in range (last_index,-1,-1):
+        if es_deposito_plazo(DF1.iloc[i,0]):
+            stop_index = i
+            break
+
+    if stop_index is not None:
+        DF1 = DF1.iloc[:stop_index+1]
+
+    for index, row in enumerate(DF1.iloc[:, 2]):
+        if not pd.isnull(row):
+            column_index = index
+            break
+        DF1.drop(index, inplace= True)
+
+    DF1.columns = DF1.iloc[0, ::]
+    DF1.drop(DF1.index[0], inplace = True)
+    DF1 = DF1.dropna()
+    # DF1.columns.values[0] = "Posicionamiento"
+    # DF1.columns.values[1] = "Detallada"
+    # DF1.columns.values[2] = "Monto (En miles de soles)"
+    # DF1.columns.values[3] = "Participación"
+    # DF1.columns.values[4] = "Porcentaje Acumulado"
+
+    DF1 = renombrar_columnas_por_posicion(DF1, {0: "Posicionamiento"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {1: "Detallada"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {2: "Monto (En miles de soles)"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {3: "Participación"})
+    DF1 = renombrar_columnas_por_posicion(DF1, {4: "Porcentaje Acumulado"})
+
+    DF1.iloc[:, 3:] = DF1.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF1.iloc[:,3:] = DF1.iloc[: , 3:]/100
+
+    ruta_renombre = 'Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Diccionario_SBS.xlsx'
+    df_ren = pd.read_excel(ruta_renombre, sheet_name ='Rankings')
+    df_ren = df_ren.set_index("Nombre_Antiguo")
+    dic_ren = df_ren.to_dict()
+
+    def dic_cambio_n(row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"][row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+
+    DF1["Detallada"] = DF1.apply(dic_cambio_n, axis = 1)
+    DF1 = DF1.T
+    DF1 = DF1.reset_index()
+    DF1.columns = DF1.iloc[1, ::]
+    DF1.drop(DF1.index[1], inplace = True)
+
+    def dic_cambio_n (row):
+        try:
+            nom = dic_ren["Nombre_Nuevo"] [row["Detallada"]]
+        except:
+            nom = row["Detallada"]
+        return nom
+    DF1["Detallada"] = DF1.apply(dic_cambio_n,axis = 1)
+
+    #### Base 2 ###
+    DF3 = pd.read_excel(archivo, sheet_name = 0)
+    DF3 = DF3.dropna(axis = 1, how = "all")
+
+    for index, row in DF3.iterrows():
+        if es_deposito_plazo(row.iloc[0]):
+            break
+        else:
+            DF3.drop(index, inplace= True)
+
+    DF3 = DF3.dropna()
+    DF3.columns.values[0] = "Posicionamiento"
+    DF3.columns.values[1] = "Detallada"
+    DF3.columns.values[2] = "Monto (En miles de soles)"
+    DF3.columns.values[3] = "Participación"
+    DF3.columns.values[4] = "Porcentaje Acumulado"
+    DF3.iloc[:, 3:] = DF3.iloc[:, 3:].apply(pd.to_numeric, errors = "coerce")
+    DF3.iloc[:,3:] = DF3.iloc[: , 3:]/100
+
+    DF3["Detallada"] = DF3.apply(dic_cambio_n, axis = 1)
+    DF3 = DF3.T
+    DF3 = DF3.reset_index()
+    DF3.columns = DF3.iloc[1, ::]
+    DF3.drop(DF3.index[1], inplace = True)
+
+    DF_Base_CajR = pd.DataFrame()
+    for i in range (0, len(DF1.columns)-1):
+        DF_ = DF1.copy()
+        a = DF1.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_1 = DF1.get([ "Detallada"])
+        DF_1.insert(0, "Tipo", "Depósitos de Ahorro")
+        DF_1.insert(0, "Nombre", a)
+        DF_1.insert(0, "Moneda", "MN")
+        DF_1.insert(0, "Institución", "Cajas Rurales")
+        DF_1.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_1.insert(6, fecha_col, DF1[a])
+
+        DF_3 = DF3.copy()
+        c = DF3.columns[1::][i]
+        fecha_col = "01" + "/" + meses_n[meses_.index(mes_)] + "/" + anio
+        fecha_col = datetime.datetime.strptime(fecha_col, "%d/%m/%Y")
+        DF_3 = DF3.get([ "Detallada"])
+        DF_3.insert(0, "Tipo", "Depósitos a Plazo")
+        DF_3.insert(0, "Nombre", c)
+        DF_3.insert(0, "Moneda", "MN")
+        DF_3.insert(0, "Institución", "Cajas Rurales")
+        DF_3.insert(1, "Estructura", "Ranking Depósitos por Tipo")
+        DF_3.insert(6, fecha_col, DF3[c])
+
+        DF_Base_CajR = pd.concat([DF_Base_CajR, DF_1, DF_3])
+    
+   ####### BASE TOTAL ###################
+
+    DF_Total = pd.concat([DF_Base_Bancos,  DF_Base_Fin, DF_Base_Caj, DF_Base_CajR])
+    DF_Total.insert(0, "key",DF_Total["Institución"] +DF_Total["Estructura"]+ DF_Total["Moneda"] + DF_Total["Nombre"] + DF_Total["Tipo"] + DF_Total["Detallada"])
+    
+    ruta_base = "Z:\\Mesa de Inversiones\\Bottom-Up\\2 Proceso de Inversión Renta Fija\\Corporates - Emisiones\\Crédito - BU\\1. Emisores\\1. One pagers\\Complementos\\Historicos\\20.Ranking Depósitos por Tipo.xlsx"
+
+    with pd.ExcelFile(ruta_base) as writer:  
+        BD_Total = writer.parse(sheet_name='RankingDepoTipo')
+        
+    BD_Total_ = BD_Total.copy()
+    BD_Total_['Indicador'] = 'Mapeado'
+    BD_Total_ = BD_Total_.set_index("key")
+    dic_Total_ = BD_Total_.to_dict()
+    
+    DF_Total2 = DF_Total.copy()
+    DF_Total2['Indicador'] =  DF_Total2['key'].map(dic_Total_['Indicador'])
+    DF_Total2 = DF_Total2.loc[DF_Total2['Indicador'].isin([np.nan])].sort_index(ignore_index=True) 
+    DF_Total2 = DF_Total2.drop(['Indicador'], axis=1)
+    BD_Total = pd.concat([BD_Total, DF_Total2])
+
+    DF_Total = DF_Total.set_index("key")
+    dic_cr = DF_Total.to_dict()
+    fecha_col = '01' +'/'+ meses_n[meses_.index(mes_)] +'/'+ anio
+    fecha_col = datetime.datetime.strptime(fecha_col, '%d/%m/%Y')  
+    BD_Total[fecha_col] = BD_Total['key'].map(dic_cr[fecha_col])   
+
+
+    with pd.ExcelWriter(ruta_base ,  mode="a", engine="openpyxl",if_sheet_exists = 'replace') as writer:
+        BD_Total.to_excel(writer, sheet_name="RankingDepoTipo", index = False)
+#%%
+
+#%%
+
+#%%
+import warnings
+warnings.filterwarnings("ignore")
+for i in array_rutas[::1]:
+    m = i[0:2]
+    mes = meses[int(m)-1]
+    anio = i[2::] 
+    mes_ = meses_[int(m)-1]
+    print(mes + ' ' + anio)
+    main(mes,mes_,anio)
+#%%
+
+#%%
+
+#%%
+
+#%%
